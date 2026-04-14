@@ -1,6 +1,6 @@
-// App logic for the Bulls and Cows coach.
+// App logic for the Number Cracker coach.
 // Three modes: coach (primary), auto (demo), practice (human guesses).
-// Length is configurable at 3 or 4 unique digits.
+// Length is configurable at 3 or 4 digits; repeats and leading zeros allowed.
 
 import { Solver, allCandidates, isValidGuess, isWin, score } from "./solver.js";
 
@@ -18,8 +18,7 @@ const guessDisplay = $("guess-display");
 const promptHint = $("prompt-hint");
 const coachInput = $("coach-input");
 const playInput = $("play-input");
-const bullsValue = $("bulls-value");
-const cowsValue = $("cows-value");
+const correctValue = $("correct-value");
 const submitScore = $("submit-score");
 const submitGuess = $("submit-guess");
 const startBtn = $("start-btn");
@@ -39,17 +38,15 @@ const footerStats = $("footer-stats");
 
 // --- State ---------------------------------------------------------------
 const state = {
-  mode: "coach", // "coach" | "auto" | "practice"
+  mode: "coach",
   length: 3,
   solver: new Solver(3),
   secret: null,
   turn: 0,
   history: [],
-  lastPool: 720,
   active: false,
   currentGuess: null,
-  pendingBulls: 0,
-  pendingCows: 0,
+  pendingCorrect: 0,
   autoTimer: null,
 };
 
@@ -121,7 +118,6 @@ function updatePool(size) {
     poolFoot.textContent =
       "finalists: " + state.solver.candidates.slice(0, 6).join(" · ");
   else poolFoot.textContent = `${size} possibilities remain`;
-  state.lastPool = size;
 }
 
 // --- Guess display -------------------------------------------------------
@@ -175,12 +171,12 @@ function renderHistory() {
     const li = document.createElement("li");
     li.className =
       "history-row" + (isWin(entry.score, state.length) ? " win" : "");
+    const chipClass = entry.score === 0 ? "chip zero" : "chip";
     li.innerHTML = `
       <span class="history-turn">#${entry.turn}</span>
       <span class="history-guess">${entry.guess}</span>
       <span class="chip-group">
-        <span class="chip bulls">${entry.score.bulls} bulls</span>
-        <span class="chip cows">${entry.score.cows} cows</span>
+        <span class="${chipClass}">${entry.score} / ${state.length} correct</span>
       </span>
       <span class="history-pool">${entry.pool}</span>
     `;
@@ -197,11 +193,11 @@ const MODE_COPY = {
     eyebrow: "RECOMMENDED GUESS",
     title: "tell your friend this guess",
     hint: (length) =>
-      `Your friend picks a ${length}-digit secret with unique digits. Press <strong>start</strong> and I'll tell you the optimal first guess — write it down, tell them, then enter what they scored you.`,
+      `Your friend picks a secret ${length}-digit number (repeats and leading zeros OK). Press <strong>start</strong> and I'll tell you the optimal first guess — tell them, then enter how many digits they said are <strong>correct</strong>.`,
   },
   auto: {
     eyebrow: "ENGINE'S GUESS",
-    title: "watch me solve",
+    title: "watch me crack a random secret",
     hint: () =>
       `Press <strong>start</strong> and I'll pick a random secret, then crack it in front of you using Knuth minimax.`,
   },
@@ -209,7 +205,7 @@ const MODE_COPY = {
     eyebrow: "YOUR GUESS",
     title: "you vs the secret",
     hint: (length) =>
-      `I'll pick a secret ${length}-digit number. Press <strong>start</strong>, then guess — I'll score each attempt with bulls and cows.`,
+      `I'll pick a secret ${length}-digit number. Press <strong>start</strong>, then guess — I'll tell you how many digits you got right each time.`,
   },
 };
 
@@ -240,8 +236,7 @@ function setLength(length) {
   renderDigitSlots();
   softReset(false);
   const total = totalCandidates();
-  const avgByLength = { 3: "~4 turns", 4: "~4.6 turns" };
-  footerStats.textContent = `${length}-digit secrets · ${total} possibilities · average ${avgByLength[length]} to solve`;
+  footerStats.textContent = `${length}-digit secrets · ${total} possibilities · repeats & leading zeros allowed`;
   updatePool(total);
   setMode(state.mode);
 }
@@ -254,10 +249,8 @@ function softReset(applyMode = true) {
   state.secret = null;
   state.active = false;
   state.currentGuess = null;
-  state.pendingBulls = 0;
-  state.pendingCows = 0;
-  bullsValue.textContent = "0";
-  cowsValue.textContent = "0";
+  state.pendingCorrect = 0;
+  correctValue.textContent = "0";
   renderGuessDisplay(null);
   renderTopPicks();
   renderHistory();
@@ -312,16 +305,14 @@ function issueCoachGuess() {
   state.currentGuess = guess;
   renderGuessDisplay(guess);
   renderTopPicks();
-  state.pendingBulls = 0;
-  state.pendingCows = 0;
-  bullsValue.textContent = "0";
-  cowsValue.textContent = "0";
+  state.pendingCorrect = 0;
+  correctValue.textContent = "0";
 }
 
 function handleScoreSubmit() {
   if (state.mode !== "coach" || !state.active || !state.currentGuess) return;
-  const sc = { bulls: state.pendingBulls, cows: state.pendingCows };
-  if (sc.bulls + sc.cows > state.length) {
+  const sc = state.pendingCorrect;
+  if (sc < 0 || sc > state.length) {
     shake(coachInput);
     return;
   }
@@ -513,17 +504,10 @@ victoryAgain.addEventListener("click", () => {
 });
 steppers.forEach((btn) =>
   btn.addEventListener("click", () => {
-    const key = btn.dataset.step;
     const delta = Number(btn.dataset.delta);
-    const current = key === "bulls" ? state.pendingBulls : state.pendingCows;
-    const next = Math.max(0, Math.min(state.length, current + delta));
-    if (key === "bulls") {
-      state.pendingBulls = next;
-      bullsValue.textContent = String(next);
-    } else {
-      state.pendingCows = next;
-      cowsValue.textContent = String(next);
-    }
+    const next = Math.max(0, Math.min(state.length, state.pendingCorrect + delta));
+    state.pendingCorrect = next;
+    correctValue.textContent = String(next);
   })
 );
 submitScore.addEventListener("click", handleScoreSubmit);

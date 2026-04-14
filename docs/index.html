@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Bulls &amp; Cows Coach — Smart Guess Helper</title>
+    <title>Number Cracker — Smart Guess Coach</title>
     <meta
       name="description"
-      content="A Knuth-minimax coach for Bulls and Cows. Your friend picks a secret number — this app tells you the smartest guess every turn."
+      content="A Knuth-minimax coach for the number-guessing game. Your friend picks a secret number — this app tells you the smartest guess every turn."
     />
     <link
       rel="icon"
@@ -30,10 +30,10 @@
 
     <header class="site-header">
       <div class="brand">
-        <div class="brand-mark">B&amp;C</div>
+        <div class="brand-mark">NC</div>
         <div class="brand-meta">
-          <h1>Bulls &amp; Cows Coach</h1>
-          <p>smart guess helper · Knuth minimax · entropy tiebreak</p>
+          <h1>Number Cracker</h1>
+          <p>smart guess coach · Knuth minimax · entropy tiebreak</p>
         </div>
       </div>
       <div class="header-right">
@@ -75,7 +75,7 @@
           <span class="pool-label">Candidate pool</span>
           <span class="pool-turn" id="turn-indicator">turn 0</span>
         </div>
-        <div class="pool-counter" id="pool-counter">720</div>
+        <div class="pool-counter" id="pool-counter">1000</div>
         <div class="pool-bar">
           <div class="pool-bar-fill" id="pool-bar-fill"></div>
         </div>
@@ -100,23 +100,15 @@
           <div class="coach-input hidden" id="coach-input">
             <div class="coach-instructions">
               <span class="pill">step</span>
-              Tell your friend this guess, then enter what they scored:
+              Tell your friend this guess. How many digits did they say are correct?
             </div>
-            <div class="score-stepper-row">
+            <div class="correct-stepper">
               <label>
-                <span>bulls</span>
-                <div class="stepper">
-                  <button type="button" data-step="bulls" data-delta="-1">−</button>
-                  <span class="stepper-value" id="bulls-value">0</span>
-                  <button type="button" data-step="bulls" data-delta="1">+</button>
-                </div>
-              </label>
-              <label>
-                <span>cows</span>
-                <div class="stepper">
-                  <button type="button" data-step="cows" data-delta="-1">−</button>
-                  <span class="stepper-value" id="cows-value">0</span>
-                  <button type="button" data-step="cows" data-delta="1">+</button>
+                <span>digits correct</span>
+                <div class="stepper big-stepper">
+                  <button type="button" data-step="correct" data-delta="-1">−</button>
+                  <span class="stepper-value" id="correct-value">0</span>
+                  <button type="button" data-step="correct" data-delta="1">+</button>
                 </div>
               </label>
             </div>
@@ -182,7 +174,7 @@
 
     <footer class="site-footer">
       <span id="footer-stats"
-        >3-digit secrets · 720 possibilities · average ~4 turns to solve</span
+        >3-digit secrets · 1000 possibilities · repeats &amp; leading zeros allowed</span
       >
     </footer>
 

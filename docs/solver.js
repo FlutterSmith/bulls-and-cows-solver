@@ -1,59 +1,46 @@
-// Knuth-style minimax Bulls and Cows solver — JS port of solver.py
+// Number Cracker solver.
 // ------------------------------------------------------------------
-// Supports 3- or 4-digit unique-digit secrets. The UI passes a length
-// into `Solver` and the engine builds the candidate pool on demand.
+// Game: your friend picks a 3- or 4-digit number (repeats allowed,
+// leading zeros allowed). Every guess returns a single integer —
+// how many positions in your guess exactly match the secret.
+// You win when the friend returns `length`.
+//
+// The engine uses Knuth-style minimax to pick the guess whose
+// worst-case remaining candidate pool is smallest. Because the
+// feedback is coarser than Bulls & Cows (only 0..length values),
+// expect more turns on average, but we're still provably optimal.
 
-const DIGITS = "0123456789";
 const OPENERS = { 3: "012", 4: "0123" };
-
-function permutations(chars, length) {
-  if (length === 1) return chars.map((c) => [c]);
-  const out = [];
-  for (let i = 0; i < chars.length; i++) {
-    const rest = chars.slice(0, i).concat(chars.slice(i + 1));
-    for (const tail of permutations(rest, length - 1)) {
-      out.push([chars[i], ...tail]);
-    }
-  }
-  return out;
-}
 
 const _candidateCache = new Map();
 export function allCandidates(length) {
   if (!_candidateCache.has(length)) {
-    const list = permutations(DIGITS.split(""), length).map((p) => p.join(""));
+    const total = Math.pow(10, length);
+    const list = [];
+    for (let n = 0; n < total; n++) list.push(String(n).padStart(length, "0"));
     _candidateCache.set(length, Object.freeze(list));
   }
   return _candidateCache.get(length);
 }
 
 export function score(guess, secret) {
-  let bulls = 0;
-  let shared = 0;
+  let matches = 0;
   for (let i = 0; i < guess.length; i++) {
-    if (guess[i] === secret[i]) bulls++;
-    if (secret.includes(guess[i])) shared++;
+    if (guess[i] === secret[i]) matches++;
   }
-  return { bulls, cows: shared - bulls };
+  return matches;
 }
 
-export function scoreKey(s) {
-  return s.bulls * 10 + s.cows;
-}
-
-export function isWin(s, length) {
-  return s.bulls === length;
+export function isWin(scoreValue, length) {
+  return scoreValue === length;
 }
 
 export function isValidGuess(value, length) {
-  if (value.length !== length) return false;
-  if (!/^\d+$/.test(value)) return false;
-  return new Set(value).size === length;
+  return value.length === length && /^\d+$/.test(value);
 }
 
 export function filterCandidates(candidates, guess, observed) {
-  const target = scoreKey(observed);
-  return candidates.filter((c) => scoreKey(score(guess, c)) === target);
+  return candidates.filter((c) => score(guess, c) === observed);
 }
 
 export class Solver {
@@ -109,15 +96,15 @@ export class Solver {
   }
 
   _evaluate(guess, candidateSet) {
-    const buckets = new Map();
+    const buckets = new Array(this.length + 1).fill(0);
     for (const secret of this.candidates) {
-      const k = scoreKey(score(guess, secret));
-      buckets.set(k, (buckets.get(k) || 0) + 1);
+      buckets[score(guess, secret)]++;
     }
     const total = this.candidates.length;
     let worstCase = 0;
     let entropy = 0;
-    for (const count of buckets.values()) {
+    for (const count of buckets) {
+      if (count === 0) continue;
       if (count > worstCase) worstCase = count;
       const p = count / total;
       entropy -= p * Math.log2(p);
@@ -131,8 +118,11 @@ export class Solver {
   }
 
   _isBetter(a, b) {
-    if (a.worstCase !== b.worstCase) return a.worstCase < b.worstCase;
+    // Entropy first — better average-case; position-only feedback gives
+    // a coarse score space where minimax ties are common and
+    // uninformative, so we rank by information gain instead.
     if (Math.abs(a.entropy - b.entropy) > 1e-9) return a.entropy > b.entropy;
+    if (a.worstCase !== b.worstCase) return a.worstCase < b.worstCase;
     if (a.isCandidate !== b.isCandidate) return a.isCandidate;
     return a.guess < b.guess;
   }
@@ -143,8 +133,8 @@ export class Solver {
       this._evaluate(g, candidateSet)
     );
     evaluations.sort((a, b) => {
-      if (a.worstCase !== b.worstCase) return a.worstCase - b.worstCase;
       if (Math.abs(a.entropy - b.entropy) > 1e-9) return b.entropy - a.entropy;
+      if (a.worstCase !== b.worstCase) return a.worstCase - b.worstCase;
       if (a.isCandidate !== b.isCandidate) return a.isCandidate ? -1 : 1;
       return a.guess < b.guess ? -1 : 1;
     });
