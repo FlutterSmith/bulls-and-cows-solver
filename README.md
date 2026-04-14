@@ -42,7 +42,7 @@ I use that feedback to whittle the candidate pool down and make the next guess. 
 ## Install
 
 ```bash
-git clone https://github.com/SiNfuuL/bulls-and-cows-solver.git
+git clone https://github.com/FlutterSmith/bulls-and-cows-solver.git
 cd bulls-and-cows-solver
 pip install -r requirements.txt
 ```
