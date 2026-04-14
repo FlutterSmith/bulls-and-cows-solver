@@ -1,11 +1,10 @@
 // Knuth-style minimax Bulls and Cows solver — JS port of solver.py
 // ------------------------------------------------------------------
-// All candidates, scoring, and the minimax decision function live here.
-// The UI layer in app.js only interacts with the exported Solver class.
+// Supports 3- or 4-digit unique-digit secrets. The UI passes a length
+// into `Solver` and the engine builds the candidate pool on demand.
 
-export const SECRET_LENGTH = 4;
 const DIGITS = "0123456789";
-const OPENING_GUESS = "0123";
+const OPENERS = { 3: "012", 4: "0123" };
 
 function permutations(chars, length) {
   if (length === 1) return chars.map((c) => [c]);
@@ -19,9 +18,14 @@ function permutations(chars, length) {
   return out;
 }
 
-export const ALL_CANDIDATES = Object.freeze(
-  permutations(DIGITS.split(""), SECRET_LENGTH).map((p) => p.join(""))
-);
+const _candidateCache = new Map();
+export function allCandidates(length) {
+  if (!_candidateCache.has(length)) {
+    const list = permutations(DIGITS.split(""), length).map((p) => p.join(""));
+    _candidateCache.set(length, Object.freeze(list));
+  }
+  return _candidateCache.get(length);
+}
 
 export function score(guess, secret) {
   let bulls = 0;
@@ -37,14 +41,14 @@ export function scoreKey(s) {
   return s.bulls * 10 + s.cows;
 }
 
-export function isWin(s) {
-  return s.bulls === SECRET_LENGTH;
+export function isWin(s, length) {
+  return s.bulls === length;
 }
 
-export function isValidGuess(value) {
-  if (value.length !== SECRET_LENGTH) return false;
+export function isValidGuess(value, length) {
+  if (value.length !== length) return false;
   if (!/^\d+$/.test(value)) return false;
-  return new Set(value).size === SECRET_LENGTH;
+  return new Set(value).size === length;
 }
 
 export function filterCandidates(candidates, guess, observed) {
@@ -53,16 +57,26 @@ export function filterCandidates(candidates, guess, observed) {
 }
 
 export class Solver {
-  constructor() {
-    this.allGuesses = ALL_CANDIDATES;
-    this.candidates = ALL_CANDIDATES;
+  constructor(length = 3) {
+    this.length = length;
+    this.allGuesses = allCandidates(length);
+    this.candidates = this.allGuesses;
     this.turn = 0;
     this.cache = new Map();
   }
 
   reset() {
-    this.candidates = ALL_CANDIDATES;
+    this.candidates = this.allGuesses;
     this.turn = 0;
+  }
+
+  setLength(length) {
+    if (length === this.length) return;
+    this.length = length;
+    this.allGuesses = allCandidates(length);
+    this.candidates = this.allGuesses;
+    this.turn = 0;
+    this.cache = new Map();
   }
 
   record(guess, observed) {
@@ -71,7 +85,8 @@ export class Solver {
   }
 
   nextGuess() {
-    if (this.turn === 0) return OPENING_GUESS;
+    if (this.turn === 0) return OPENERS[this.length] || this.allGuesses[0];
+    if (this.candidates.length === 0) return null;
     if (this.candidates.length <= 2) return this.candidates[0];
     const key = [...this.candidates].sort().join(",");
     const cached = this.cache.get(key);

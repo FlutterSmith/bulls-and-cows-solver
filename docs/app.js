@@ -1,26 +1,22 @@
-// App logic for the Bulls and Cows web UI.
-// Wires the Solver engine into a visual state machine with three modes.
+// App logic for the Bulls and Cows coach.
+// Three modes: coach (primary), auto (demo), practice (human guesses).
+// Length is configurable at 3 or 4 unique digits.
 
-import {
-  ALL_CANDIDATES,
-  Solver,
-  SECRET_LENGTH,
-  isValidGuess,
-  isWin,
-  score,
-} from "./solver.js";
+import { Solver, allCandidates, isValidGuess, isWin, score } from "./solver.js";
 
 // --- DOM lookups ---------------------------------------------------------
 const $ = (id) => document.getElementById(id);
 const modeButtons = document.querySelectorAll(".mode-btn");
+const lengthButtons = document.querySelectorAll(".length-btn");
 const poolCounter = $("pool-counter");
 const poolBarFill = $("pool-bar-fill");
 const poolFoot = $("pool-foot-message");
 const turnIndicator = $("turn-indicator");
+const currentEyebrow = $("current-eyebrow");
 const currentTitle = $("current-title");
 const guessDisplay = $("guess-display");
 const promptHint = $("prompt-hint");
-const scoreInput = $("score-input");
+const coachInput = $("coach-input");
 const playInput = $("play-input");
 const bullsValue = $("bulls-value");
 const cowsValue = $("cows-value");
@@ -36,25 +32,65 @@ const victorySecret = $("victory-secret");
 const victoryTurns = $("victory-turns");
 const victoryMode = $("victory-mode");
 const victoryAgain = $("victory-again");
-const digitInputs = document.querySelectorAll(".digit-input");
+const digitRow = $("digit-row");
 const steppers = document.querySelectorAll("[data-step]");
 const confettiCanvas = $("confetti");
+const footerStats = $("footer-stats");
 
 // --- State ---------------------------------------------------------------
-const TOTAL = ALL_CANDIDATES.length;
 const state = {
-  mode: "solve", // "solve" | "auto" | "play"
-  solver: new Solver(),
-  secret: null, // only set in auto/play modes
+  mode: "coach", // "coach" | "auto" | "practice"
+  length: 3,
+  solver: new Solver(3),
+  secret: null,
   turn: 0,
-  history: [], // {turn, guess, score, pool}
-  lastPool: TOTAL,
+  history: [],
+  lastPool: 720,
   active: false,
   currentGuess: null,
   pendingBulls: 0,
   pendingCows: 0,
   autoTimer: null,
 };
+
+function totalCandidates() {
+  return allCandidates(state.length).length;
+}
+
+// --- Dynamic digit slots -------------------------------------------------
+function renderDigitSlots() {
+  guessDisplay.dataset.length = state.length;
+  guessDisplay.innerHTML = "";
+  for (let i = 0; i < state.length; i++) {
+    const span = document.createElement("span");
+    span.className = "digit";
+    span.textContent = "–";
+    guessDisplay.appendChild(span);
+  }
+  digitRow.innerHTML = "";
+  for (let i = 0; i < state.length; i++) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.inputMode = "numeric";
+    input.maxLength = 1;
+    input.className = "digit-input";
+    input.dataset.index = String(i);
+    input.addEventListener("input", (e) => {
+      const v = e.target.value.replace(/[^\d]/g, "").slice(0, 1);
+      e.target.value = v;
+      const inputs = digitRow.querySelectorAll(".digit-input");
+      if (v && i < inputs.length - 1) inputs[i + 1].focus();
+    });
+    input.addEventListener("keydown", (e) => {
+      const inputs = digitRow.querySelectorAll(".digit-input");
+      if (e.key === "Backspace" && !e.target.value && i > 0) {
+        inputs[i - 1].focus();
+      }
+      if (e.key === "Enter") handlePlaySubmit();
+    });
+    digitRow.appendChild(input);
+  }
+}
 
 // --- Animated counter ----------------------------------------------------
 function animatePoolCounter(target) {
@@ -64,7 +100,6 @@ function animatePoolCounter(target) {
   poolCounter.classList.remove("pulse");
   void poolCounter.offsetWidth;
   poolCounter.classList.add("pulse");
-
   function frame(now) {
     const t = Math.min(1, (now - startTime) / duration);
     const eased = 1 - Math.pow(1 - t, 3);
@@ -78,9 +113,9 @@ function animatePoolCounter(target) {
 
 function updatePool(size) {
   animatePoolCounter(size);
-  const pct = Math.max(3, (size / TOTAL) * 100);
+  const pct = Math.max(3, (size / totalCandidates()) * 100);
   poolBarFill.style.width = `${pct}%`;
-  if (size === TOTAL) poolFoot.textContent = "ready when you are";
+  if (size === totalCandidates()) poolFoot.textContent = "ready when you are";
   else if (size === 1) poolFoot.textContent = "locked on — one possibility";
   else if (size <= 6)
     poolFoot.textContent =
@@ -138,7 +173,8 @@ function renderHistory() {
   historyList.innerHTML = "";
   state.history.forEach((entry) => {
     const li = document.createElement("li");
-    li.className = "history-row" + (isWin(entry.score) ? " win" : "");
+    li.className =
+      "history-row" + (isWin(entry.score, state.length) ? " win" : "");
     li.innerHTML = `
       <span class="history-turn">#${entry.turn}</span>
       <span class="history-guess">${entry.guess}</span>
@@ -156,34 +192,61 @@ function renderHistory() {
 }
 
 // --- Modes ---------------------------------------------------------------
+const MODE_COPY = {
+  coach: {
+    eyebrow: "RECOMMENDED GUESS",
+    title: "tell your friend this guess",
+    hint: (length) =>
+      `Your friend picks a ${length}-digit secret with unique digits. Press <strong>start</strong> and I'll tell you the optimal first guess — write it down, tell them, then enter what they scored you.`,
+  },
+  auto: {
+    eyebrow: "ENGINE'S GUESS",
+    title: "watch me solve",
+    hint: () =>
+      `Press <strong>start</strong> and I'll pick a random secret, then crack it in front of you using Knuth minimax.`,
+  },
+  practice: {
+    eyebrow: "YOUR GUESS",
+    title: "you vs the secret",
+    hint: (length) =>
+      `I'll pick a secret ${length}-digit number. Press <strong>start</strong>, then guess — I'll score each attempt with bulls and cows.`,
+  },
+};
+
 function setMode(mode) {
   if (state.active) softReset(false);
   state.mode = mode;
   modeButtons.forEach((btn) =>
     btn.classList.toggle("active", btn.dataset.mode === mode)
   );
-  currentTitle.textContent = {
-    solve: "I'll guess your secret",
-    auto: "Watch me solve a random secret",
-    play: "Guess the secret I picked",
-  }[mode];
-  const hintText = {
-    solve:
-      "Pick a secret 4-digit number with unique digits, keep it in your head, then press <strong>start</strong>.",
-    auto:
-      "Press <strong>start</strong> and I'll pick a random secret, then solve it in front of you.",
-    play:
-      "I'll pick a secret for you. Press <strong>start</strong> when you're ready to begin guessing.",
-  }[mode];
-  promptHint.innerHTML = hintText;
+  const copy = MODE_COPY[mode];
+  currentEyebrow.textContent = copy.eyebrow;
+  currentTitle.textContent = copy.title;
+  promptHint.innerHTML = copy.hint(state.length);
   promptHint.classList.remove("hidden");
-  scoreInput.classList.add("hidden");
+  coachInput.classList.add("hidden");
   playInput.classList.add("hidden");
   startBtn.textContent = "start round";
   startBtn.disabled = false;
 }
 
-function softReset(clearMode) {
+function setLength(length) {
+  if (length === state.length) return;
+  state.length = length;
+  lengthButtons.forEach((btn) =>
+    btn.classList.toggle("active", Number(btn.dataset.length) === length)
+  );
+  state.solver.setLength(length);
+  renderDigitSlots();
+  softReset(false);
+  const total = totalCandidates();
+  const avgByLength = { 3: "~4 turns", 4: "~4.6 turns" };
+  footerStats.textContent = `${length}-digit secrets · ${total} possibilities · average ${avgByLength[length]} to solve`;
+  updatePool(total);
+  setMode(state.mode);
+}
+
+function softReset(applyMode = true) {
   clearTimeout(state.autoTimer);
   state.solver.reset();
   state.turn = 0;
@@ -198,15 +261,15 @@ function softReset(clearMode) {
   renderGuessDisplay(null);
   renderTopPicks();
   renderHistory();
-  updatePool(TOTAL);
+  updatePool(totalCandidates());
   turnIndicator.textContent = "turn 0";
   promptHint.classList.remove("hidden");
-  scoreInput.classList.add("hidden");
+  coachInput.classList.add("hidden");
   playInput.classList.add("hidden");
   startBtn.disabled = false;
   startBtn.textContent = "start round";
   hideVictory();
-  if (clearMode === undefined || clearMode) setMode(state.mode);
+  if (applyMode) setMode(state.mode);
 }
 
 function startRound() {
@@ -215,32 +278,37 @@ function startRound() {
   state.turn = 0;
   state.history = [];
   renderHistory();
-  updatePool(TOTAL);
+  updatePool(totalCandidates());
   hideVictory();
   promptHint.classList.add("hidden");
   startBtn.disabled = true;
   startBtn.textContent = "round in progress";
 
-  if (state.mode === "solve") {
-    startSolveRound();
-  } else if (state.mode === "auto") {
-    startAutoRound();
-  } else {
-    startPlayRound();
-  }
+  if (state.mode === "coach") startCoachRound();
+  else if (state.mode === "auto") startAutoRound();
+  else startPracticeRound();
 }
 
-// --- Solve mode ----------------------------------------------------------
-function startSolveRound() {
-  scoreInput.classList.remove("hidden");
+// --- Coach mode ----------------------------------------------------------
+function startCoachRound() {
+  coachInput.classList.remove("hidden");
   playInput.classList.add("hidden");
-  issueSolverGuess();
+  issueCoachGuess();
 }
 
-function issueSolverGuess() {
+function issueCoachGuess() {
   state.turn += 1;
   turnIndicator.textContent = `turn ${state.turn}`;
   const guess = state.solver.nextGuess();
+  if (!guess) {
+    poolFoot.textContent =
+      "no candidates remain — a previous score must have been wrong";
+    shake(coachInput);
+    startBtn.disabled = false;
+    startBtn.textContent = "restart";
+    state.active = false;
+    return;
+  }
   state.currentGuess = guess;
   renderGuessDisplay(guess);
   renderTopPicks();
@@ -251,10 +319,10 @@ function issueSolverGuess() {
 }
 
 function handleScoreSubmit() {
-  if (state.mode !== "solve" || !state.active || !state.currentGuess) return;
+  if (state.mode !== "coach" || !state.active || !state.currentGuess) return;
   const sc = { bulls: state.pendingBulls, cows: state.pendingCows };
-  if (sc.bulls + sc.cows > SECRET_LENGTH) {
-    shake(scoreInput);
+  if (sc.bulls + sc.cows > state.length) {
+    shake(coachInput);
     return;
   }
   state.solver.record(state.currentGuess, sc);
@@ -266,28 +334,28 @@ function handleScoreSubmit() {
   });
   renderHistory();
   updatePool(state.solver.candidates.length);
-
-  if (isWin(sc)) {
+  if (isWin(sc, state.length)) {
     endRound(state.currentGuess);
     return;
   }
   if (state.solver.candidates.length === 0) {
     poolFoot.textContent =
       "no candidates remain — a previous score must have been wrong";
-    shake(scoreInput);
+    shake(coachInput);
     startBtn.disabled = false;
     startBtn.textContent = "restart";
     state.active = false;
     return;
   }
-  issueSolverGuess();
+  issueCoachGuess();
 }
 
 // --- Auto mode -----------------------------------------------------------
 function startAutoRound() {
-  scoreInput.classList.add("hidden");
+  coachInput.classList.add("hidden");
   playInput.classList.add("hidden");
-  state.secret = ALL_CANDIDATES[Math.floor(Math.random() * ALL_CANDIDATES.length)];
+  const pool = allCandidates(state.length);
+  state.secret = pool[Math.floor(Math.random() * pool.length)];
   stepAuto();
 }
 
@@ -309,28 +377,31 @@ function stepAuto() {
     });
     renderHistory();
     updatePool(state.solver.candidates.length);
-    if (isWin(sc)) {
+    if (isWin(sc, state.length)) {
       endRound(state.secret);
       return;
     }
-    state.autoTimer = setTimeout(stepAuto, 950);
-  }, 850);
+    state.autoTimer = setTimeout(stepAuto, 900);
+  }, 800);
 }
 
-// --- Play mode -----------------------------------------------------------
-function startPlayRound() {
-  scoreInput.classList.add("hidden");
+// --- Practice mode -------------------------------------------------------
+function startPracticeRound() {
+  coachInput.classList.add("hidden");
   playInput.classList.remove("hidden");
-  state.secret = ALL_CANDIDATES[Math.floor(Math.random() * ALL_CANDIDATES.length)];
-  renderGuessDisplay("????");
-  digitInputs.forEach((input) => (input.value = ""));
-  digitInputs[0].focus();
+  const pool = allCandidates(state.length);
+  state.secret = pool[Math.floor(Math.random() * pool.length)];
+  renderGuessDisplay("?".repeat(state.length));
+  const inputs = digitRow.querySelectorAll(".digit-input");
+  inputs.forEach((input) => (input.value = ""));
+  if (inputs[0]) inputs[0].focus();
 }
 
 function handlePlaySubmit() {
-  if (state.mode !== "play" || !state.active) return;
-  const guess = [...digitInputs].map((i) => i.value).join("");
-  if (!isValidGuess(guess)) {
+  if (state.mode !== "practice" || !state.active) return;
+  const inputs = digitRow.querySelectorAll(".digit-input");
+  const guess = [...inputs].map((i) => i.value).join("");
+  if (!isValidGuess(guess, state.length)) {
     shake(playInput);
     return;
   }
@@ -338,16 +409,11 @@ function handlePlaySubmit() {
   turnIndicator.textContent = `turn ${state.turn}`;
   const sc = score(guess, state.secret);
   renderGuessDisplay(guess);
-  state.history.push({
-    turn: state.turn,
-    guess,
-    score: sc,
-    pool: 0,
-  });
+  state.history.push({ turn: state.turn, guess, score: sc, pool: 0 });
   renderHistory();
-  digitInputs.forEach((input) => (input.value = ""));
-  digitInputs[0].focus();
-  if (isWin(sc)) endRound(state.secret);
+  inputs.forEach((input) => (input.value = ""));
+  if (inputs[0]) inputs[0].focus();
+  if (isWin(sc, state.length)) endRound(state.secret);
 }
 
 // --- End of round --------------------------------------------------------
@@ -367,11 +433,8 @@ function showVictory(secret) {
   victoryMode.textContent = state.mode;
   victoryOverlay.classList.remove("hidden");
 }
-function hideVictory() {
-  victoryOverlay.classList.add("hidden");
-}
+function hideVictory() { victoryOverlay.classList.add("hidden"); }
 
-// --- Helpers -------------------------------------------------------------
 function shake(node) {
   node.classList.remove("shake");
   void node.offsetWidth;
@@ -387,7 +450,6 @@ function burstConfetti() {
   confettiCanvas.style.width = `${window.innerWidth}px`;
   confettiCanvas.style.height = `${window.innerHeight}px`;
   ctx.scale(dpr, dpr);
-
   const colors = ["#7a5cff", "#2de2e6", "#ff4fa3", "#ffd166", "#37f7a6", "#ffffff"];
   const particles = [];
   const cx = window.innerWidth / 2;
@@ -396,8 +458,7 @@ function burstConfetti() {
     const angle = Math.random() * Math.PI * 2;
     const speed = 5 + Math.random() * 10;
     particles.push({
-      x: cx,
-      y: cy,
+      x: cx, y: cy,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed - 4,
       size: 4 + Math.random() * 6,
@@ -438,6 +499,9 @@ function burstConfetti() {
 modeButtons.forEach((btn) =>
   btn.addEventListener("click", () => setMode(btn.dataset.mode))
 );
+lengthButtons.forEach((btn) =>
+  btn.addEventListener("click", () => setLength(Number(btn.dataset.length)))
+);
 startBtn.addEventListener("click", () => {
   if (state.active) return;
   startRound();
@@ -447,13 +511,12 @@ victoryAgain.addEventListener("click", () => {
   hideVictory();
   startRound();
 });
-
 steppers.forEach((btn) =>
   btn.addEventListener("click", () => {
     const key = btn.dataset.step;
     const delta = Number(btn.dataset.delta);
     const current = key === "bulls" ? state.pendingBulls : state.pendingCows;
-    const next = Math.max(0, Math.min(SECRET_LENGTH, current + delta));
+    const next = Math.max(0, Math.min(state.length, current + delta));
     if (key === "bulls") {
       state.pendingBulls = next;
       bullsValue.textContent = String(next);
@@ -466,21 +529,8 @@ steppers.forEach((btn) =>
 submitScore.addEventListener("click", handleScoreSubmit);
 submitGuess.addEventListener("click", handlePlaySubmit);
 
-digitInputs.forEach((input, i) => {
-  input.addEventListener("input", (e) => {
-    const v = e.target.value.replace(/[^\d]/g, "").slice(0, 1);
-    e.target.value = v;
-    if (v && i < digitInputs.length - 1) digitInputs[i + 1].focus();
-  });
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Backspace" && !e.target.value && i > 0) {
-      digitInputs[i - 1].focus();
-    }
-    if (e.key === "Enter") handlePlaySubmit();
-  });
-});
-
 // Initial render
-setMode("solve");
+renderDigitSlots();
+setMode("coach");
 renderGuessDisplay(null);
-updatePool(TOTAL);
+updatePool(totalCandidates());

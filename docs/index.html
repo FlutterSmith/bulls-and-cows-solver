@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Bulls &amp; Cows Solver — Knuth Minimax</title>
+    <title>Bulls &amp; Cows Coach — Smart Guess Helper</title>
     <meta
       name="description"
-      content="A Knuth-minimax solver for the 4-unique-digit Bulls and Cows game. Watch it crack any secret in under six guesses."
+      content="A Knuth-minimax coach for Bulls and Cows. Your friend picks a secret number — this app tells you the smartest guess every turn."
     />
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%90%82%3C/text%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%AF%3C/text%3E%3C/svg%3E"
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -32,34 +32,40 @@
       <div class="brand">
         <div class="brand-mark">B&amp;C</div>
         <div class="brand-meta">
-          <h1>Bulls &amp; Cows Solver</h1>
-          <p>Knuth minimax · entropy tiebreak · 4-unique-digit secrets</p>
+          <h1>Bulls &amp; Cows Coach</h1>
+          <p>smart guess helper · Knuth minimax · entropy tiebreak</p>
         </div>
       </div>
-      <a
-        class="github-link"
-        href="https://github.com/FlutterSmith/bulls-and-cows-solver"
-        target="_blank"
-        rel="noopener"
-        >view source</a
-      >
+      <div class="header-right">
+        <div class="length-toggle" role="group" aria-label="Digit length">
+          <button class="length-btn active" data-length="3">3 digits</button>
+          <button class="length-btn" data-length="4">4 digits</button>
+        </div>
+        <a
+          class="github-link"
+          href="https://github.com/FlutterSmith/bulls-and-cows-solver"
+          target="_blank"
+          rel="noopener"
+          >view source</a
+        >
+      </div>
     </header>
 
     <nav class="mode-switch" aria-label="Mode selection">
-      <button class="mode-btn active" data-mode="solve">
-        <span class="mode-icon">🧠</span>
-        <span class="mode-label">Solve mine</span>
-        <span class="mode-sub">AI guesses your secret</span>
+      <button class="mode-btn active" data-mode="coach">
+        <span class="mode-icon">🎯</span>
+        <span class="mode-label">Coach me</span>
+        <span class="mode-sub">Friend picked a secret — I'll tell you the smartest guess</span>
       </button>
       <button class="mode-btn" data-mode="auto">
         <span class="mode-icon">🎬</span>
         <span class="mode-label">Auto demo</span>
-        <span class="mode-sub">Watch it self-solve</span>
+        <span class="mode-sub">Watch the engine solve a random secret</span>
       </button>
-      <button class="mode-btn" data-mode="play">
-        <span class="mode-icon">🎯</span>
-        <span class="mode-label">You guess</span>
-        <span class="mode-sub">Human vs computer</span>
+      <button class="mode-btn" data-mode="practice">
+        <span class="mode-icon">🕹️</span>
+        <span class="mode-label">Practice</span>
+        <span class="mode-sub">App picks a secret, you try to guess it</span>
       </button>
     </nav>
 
@@ -69,7 +75,7 @@
           <span class="pool-label">Candidate pool</span>
           <span class="pool-turn" id="turn-indicator">turn 0</span>
         </div>
-        <div class="pool-counter" id="pool-counter">5040</div>
+        <div class="pool-counter" id="pool-counter">720</div>
         <div class="pool-bar">
           <div class="pool-bar-fill" id="pool-bar-fill"></div>
         </div>
@@ -80,72 +86,52 @@
 
       <section class="card current-card">
         <header class="card-header">
-          <span class="card-eyebrow">CURRENT MOVE</span>
+          <span class="card-eyebrow" id="current-eyebrow">RECOMMENDED GUESS</span>
           <span class="card-title" id="current-title">awaiting start</span>
         </header>
-        <div class="guess-display" id="guess-display">
-          <span class="digit">–</span>
-          <span class="digit">–</span>
-          <span class="digit">–</span>
-          <span class="digit">–</span>
-        </div>
+        <div class="guess-display" id="guess-display"></div>
 
         <div class="prompt-area" id="prompt-area">
           <div class="prompt-hint" id="prompt-hint">
-            Pick a secret 4-digit number with unique digits, keep it in your
-            head, then press <strong>start</strong>.
+            Your friend picks a 3-digit secret with unique digits. Press
+            <strong>start</strong> and I'll tell you the optimal first guess.
           </div>
-          <div class="score-input hidden" id="score-input">
-            <label>
-              <span>bulls</span>
-              <div class="stepper">
-                <button type="button" data-step="bulls" data-delta="-1">−</button>
-                <span class="stepper-value" id="bulls-value">0</span>
-                <button type="button" data-step="bulls" data-delta="1">+</button>
-              </div>
-            </label>
-            <label>
-              <span>cows</span>
-              <div class="stepper">
-                <button type="button" data-step="cows" data-delta="-1">−</button>
-                <span class="stepper-value" id="cows-value">0</span>
-                <button type="button" data-step="cows" data-delta="1">+</button>
-              </div>
-            </label>
-            <button class="submit-score" id="submit-score">submit score ▸</button>
-          </div>
-          <div class="play-input hidden" id="play-input">
-            <div class="digit-row" id="digit-row">
-              <input
-                type="text"
-                inputmode="numeric"
-                maxlength="1"
-                class="digit-input"
-                data-index="0"
-              />
-              <input
-                type="text"
-                inputmode="numeric"
-                maxlength="1"
-                class="digit-input"
-                data-index="1"
-              />
-              <input
-                type="text"
-                inputmode="numeric"
-                maxlength="1"
-                class="digit-input"
-                data-index="2"
-              />
-              <input
-                type="text"
-                inputmode="numeric"
-                maxlength="1"
-                class="digit-input"
-                data-index="3"
-              />
+
+          <div class="coach-input hidden" id="coach-input">
+            <div class="coach-instructions">
+              <span class="pill">step</span>
+              Tell your friend this guess, then enter what they scored:
             </div>
-            <button class="submit-guess" id="submit-guess">send guess ▸</button>
+            <div class="score-stepper-row">
+              <label>
+                <span>bulls</span>
+                <div class="stepper">
+                  <button type="button" data-step="bulls" data-delta="-1">−</button>
+                  <span class="stepper-value" id="bulls-value">0</span>
+                  <button type="button" data-step="bulls" data-delta="1">+</button>
+                </div>
+              </label>
+              <label>
+                <span>cows</span>
+                <div class="stepper">
+                  <button type="button" data-step="cows" data-delta="-1">−</button>
+                  <span class="stepper-value" id="cows-value">0</span>
+                  <button type="button" data-step="cows" data-delta="1">+</button>
+                </div>
+              </label>
+            </div>
+            <button class="primary-btn wide" id="submit-score">
+              log result &amp; get next guess ▸
+            </button>
+          </div>
+
+          <div class="play-input hidden" id="play-input">
+            <div class="coach-instructions">
+              <span class="pill">your turn</span>
+              I picked a secret — enter your guess:
+            </div>
+            <div class="digit-row" id="digit-row"></div>
+            <button class="primary-btn wide" id="submit-guess">send guess ▸</button>
           </div>
         </div>
 
@@ -157,7 +143,7 @@
 
       <section class="card top-card">
         <header class="card-header">
-          <span class="card-eyebrow">TOP CANDIDATE MOVES</span>
+          <span class="card-eyebrow">ALTERNATIVE MOVES</span>
           <span class="card-sub" id="top-sub">minimax ranking</span>
         </header>
         <ul class="top-list" id="top-list">
@@ -179,7 +165,7 @@
     <div class="victory-overlay hidden" id="victory-overlay">
       <div class="victory-panel">
         <span class="victory-eyebrow">SOLVED</span>
-        <div class="victory-secret" id="victory-secret">0000</div>
+        <div class="victory-secret" id="victory-secret">000</div>
         <div class="victory-stats">
           <div>
             <span class="stat-label">turns</span>
@@ -187,7 +173,7 @@
           </div>
           <div>
             <span class="stat-label">mode</span>
-            <span class="stat-value" id="victory-mode">solve</span>
+            <span class="stat-value" id="victory-mode">coach</span>
           </div>
         </div>
         <button class="primary-btn" id="victory-again">play again</button>
@@ -195,7 +181,9 @@
     </div>
 
     <footer class="site-footer">
-      <span>average ~4.6 turns · worst case ≤ 6 · 5040 possible secrets</span>
+      <span id="footer-stats"
+        >3-digit secrets · 720 possibilities · average ~4 turns to solve</span
+      >
     </footer>
 
     <script type="module" src="app.js"></script>
