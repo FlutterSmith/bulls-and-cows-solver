@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bulls &amp; Cows Solver — Knuth Minimax</title>
+    <meta
+      name="description"
+      content="A Knuth-minimax solver for the 4-unique-digit Bulls and Cows game. Watch it crack any secret in under six guesses."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%90%82%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="aurora" aria-hidden="true">
+      <span class="blob blob-a"></span>
+      <span class="blob blob-b"></span>
+      <span class="blob blob-c"></span>
+    </div>
+    <canvas id="confetti" aria-hidden="true"></canvas>
+
+    <header class="site-header">
+      <div class="brand">
+        <div class="brand-mark">B&amp;C</div>
+        <div class="brand-meta">
+          <h1>Bulls &amp; Cows Solver</h1>
+          <p>Knuth minimax · entropy tiebreak · 4-unique-digit secrets</p>
+        </div>
+      </div>
+      <a
+        class="github-link"
+        href="https://github.com/FlutterSmith/bulls-and-cows-solver"
+        target="_blank"
+        rel="noopener"
+        >view source</a
+      >
+    </header>
+
+    <nav class="mode-switch" aria-label="Mode selection">
+      <button class="mode-btn active" data-mode="solve">
+        <span class="mode-icon">🧠</span>
+        <span class="mode-label">Solve mine</span>
+        <span class="mode-sub">AI guesses your secret</span>
+      </button>
+      <button class="mode-btn" data-mode="auto">
+        <span class="mode-icon">🎬</span>
+        <span class="mode-label">Auto demo</span>
+        <span class="mode-sub">Watch it self-solve</span>
+      </button>
+      <button class="mode-btn" data-mode="play">
+        <span class="mode-icon">🎯</span>
+        <span class="mode-label">You guess</span>
+        <span class="mode-sub">Human vs computer</span>
+      </button>
+    </nav>
+
+    <main class="stage">
+      <section class="card pool-card">
+        <div class="pool-header">
+          <span class="pool-label">Candidate pool</span>
+          <span class="pool-turn" id="turn-indicator">turn 0</span>
+        </div>
+        <div class="pool-counter" id="pool-counter">5040</div>
+        <div class="pool-bar">
+          <div class="pool-bar-fill" id="pool-bar-fill"></div>
+        </div>
+        <div class="pool-foot">
+          <span id="pool-foot-message">ready when you are</span>
+        </div>
+      </section>
+
+      <section class="card current-card">
+        <header class="card-header">
+          <span class="card-eyebrow">CURRENT MOVE</span>
+          <span class="card-title" id="current-title">awaiting start</span>
+        </header>
+        <div class="guess-display" id="guess-display">
+          <span class="digit">–</span>
+          <span class="digit">–</span>
+          <span class="digit">–</span>
+          <span class="digit">–</span>
+        </div>
+
+        <div class="prompt-area" id="prompt-area">
+          <div class="prompt-hint" id="prompt-hint">
+            Pick a secret 4-digit number with unique digits, keep it in your
+            head, then press <strong>start</strong>.
+          </div>
+          <div class="score-input hidden" id="score-input">
+            <label>
+              <span>bulls</span>
+              <div class="stepper">
+                <button type="button" data-step="bulls" data-delta="-1">−</button>
+                <span class="stepper-value" id="bulls-value">0</span>
+                <button type="button" data-step="bulls" data-delta="1">+</button>
+              </div>
+            </label>
+            <label>
+              <span>cows</span>
+              <div class="stepper">
+                <button type="button" data-step="cows" data-delta="-1">−</button>
+                <span class="stepper-value" id="cows-value">0</span>
+                <button type="button" data-step="cows" data-delta="1">+</button>
+              </div>
+            </label>
+            <button class="submit-score" id="submit-score">submit score ▸</button>
+          </div>
+          <div class="play-input hidden" id="play-input">
+            <div class="digit-row" id="digit-row">
+              <input
+                type="text"
+                inputmode="numeric"
+                maxlength="1"
+                class="digit-input"
+                data-index="0"
+              />
+              <input
+                type="text"
+                inputmode="numeric"
+                maxlength="1"
+                class="digit-input"
+                data-index="1"
+              />
+              <input
+                type="text"
+                inputmode="numeric"
+                maxlength="1"
+                class="digit-input"
+                data-index="2"
+              />
+              <input
+                type="text"
+                inputmode="numeric"
+                maxlength="1"
+                class="digit-input"
+                data-index="3"
+              />
+            </div>
+            <button class="submit-guess" id="submit-guess">send guess ▸</button>
+          </div>
+        </div>
+
+        <div class="controls">
+          <button class="primary-btn" id="start-btn">start round</button>
+          <button class="ghost-btn" id="reset-btn">reset</button>
+        </div>
+      </section>
+
+      <section class="card top-card">
+        <header class="card-header">
+          <span class="card-eyebrow">TOP CANDIDATE MOVES</span>
+          <span class="card-sub" id="top-sub">minimax ranking</span>
+        </header>
+        <ul class="top-list" id="top-list">
+          <li class="top-placeholder">Play a turn to see the engine's top picks.</li>
+        </ul>
+      </section>
+
+      <section class="card history-card">
+        <header class="card-header">
+          <span class="card-eyebrow">GUESS HISTORY</span>
+          <span class="card-sub" id="history-sub">your session timeline</span>
+        </header>
+        <ul class="history-list" id="history-list">
+          <li class="history-placeholder">No moves yet.</li>
+        </ul>
+      </section>
+    </main>
+
+    <div class="victory-overlay hidden" id="victory-overlay">
+      <div class="victory-panel">
+        <span class="victory-eyebrow">SOLVED</span>
+        <div class="victory-secret" id="victory-secret">0000</div>
+        <div class="victory-stats">
+          <div>
+            <span class="stat-label">turns</span>
+            <span class="stat-value" id="victory-turns">0</span>
+          </div>
+          <div>
+            <span class="stat-label">mode</span>
+            <span class="stat-value" id="victory-mode">solve</span>
+          </div>
+        </div>
+        <button class="primary-btn" id="victory-again">play again</button>
+      </div>
+    </div>
+
+    <footer class="site-footer">
+      <span>average ~4.6 turns · worst case ≤ 6 · 5040 possible secrets</span>
+    </footer>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

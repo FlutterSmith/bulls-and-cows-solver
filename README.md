@@ -1,6 +1,8 @@
 # Bulls and Cows Solver
 
-A **Knuth-minimax** Bulls and Cows solver written in Python with a rich, colorful terminal UI. Think of it as a tiny chess-style engine for the 4-unique-digit number game — it evaluates every possible guess, picks the one that maximally shrinks the candidate pool in the worst case, and usually cracks any secret in **4–5 guesses**.
+A **Knuth-minimax** Bulls and Cows solver shipped two ways — a Python CLI with a rich terminal UI, and a polished single-page web app with glass-morphism panels, animated candidate-pool counters, and confetti on win. Think of it as a tiny chess-style engine for the 4-unique-digit number game — it evaluates every possible guess, picks the one that maximally shrinks the candidate pool in the worst case, and usually cracks any secret in **4–5 guesses**.
+
+**[▸ Live web demo](https://fluttersmith.github.io/bulls-and-cows-solver/)**
 
 ```
  ____        _ _         ___     ____
@@ -114,12 +116,37 @@ bulls-and-cows-solver/
 ├── game.py         # scoring, validation, candidate generation
 ├── solver.py       # Knuth minimax with cache and entropy tiebreak
 ├── display.py      # rich terminal UI — banner, tables, panels
+├── docs/           # web app (deployed to GitHub Pages)
+│   ├── index.html
+│   ├── styles.css
+│   ├── solver.js   # JS port of the Python solver
+│   └── app.js      # UI state machine, animations, confetti
 ├── requirements.txt
 ├── LICENSE
 └── README.md
 ```
 
-Each module has a single responsibility and none is over ~200 lines.
+Each module has a single responsibility and none is over ~300 lines.
+
+## Web app
+
+The `docs/` folder is a zero-build, single-page web app. Animations include:
+
+- Animated aurora gradient background with floating blobs
+- Glass-morphism cards with backdrop blur
+- Candidate pool counter that animates down as the solver eliminates possibilities
+- Guess history timeline with slide-in cards and colored bull/cow chips
+- Top-5 moves panel with entropy bars
+- Flip animation on each new guess
+- Confetti burst + gradient victory panel on solve
+
+To run locally:
+
+```bash
+cd docs && python -m http.server 8765
+```
+
+Then open `http://localhost:8765`.
 
 ---
 
