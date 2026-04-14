@@ -100,16 +100,26 @@
           <div class="coach-input hidden" id="coach-input">
             <div class="coach-instructions">
               <span class="pill">step</span>
-              Tell your friend this guess. How many digits did they say are correct?
+              Tell your friend this guess. Enter both answers:
             </div>
-            <div class="correct-stepper">
+            <div class="score-stepper-row">
               <label>
-                <span>digits correct</span>
-                <div class="stepper big-stepper">
+                <span>correct</span>
+                <div class="stepper">
                   <button type="button" data-step="correct" data-delta="-1">−</button>
                   <span class="stepper-value" id="correct-value">0</span>
                   <button type="button" data-step="correct" data-delta="1">+</button>
                 </div>
+                <small>digits in the secret</small>
+              </label>
+              <label>
+                <span>in order</span>
+                <div class="stepper">
+                  <button type="button" data-step="inOrder" data-delta="-1">−</button>
+                  <span class="stepper-value" id="inorder-value">0</span>
+                  <button type="button" data-step="inOrder" data-delta="1">+</button>
+                </div>
+                <small>right digit, right place</small>
               </label>
             </div>
             <button class="primary-btn wide" id="submit-score">

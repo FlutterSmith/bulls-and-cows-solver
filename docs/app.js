@@ -19,6 +19,7 @@ const promptHint = $("prompt-hint");
 const coachInput = $("coach-input");
 const playInput = $("play-input");
 const correctValue = $("correct-value");
+const inorderValue = $("inorder-value");
 const submitScore = $("submit-score");
 const submitGuess = $("submit-guess");
 const startBtn = $("start-btn");
@@ -47,6 +48,7 @@ const state = {
   active: false,
   currentGuess: null,
   pendingCorrect: 0,
+  pendingInOrder: 0,
   autoTimer: null,
 };
 
@@ -171,12 +173,13 @@ function renderHistory() {
     const li = document.createElement("li");
     li.className =
       "history-row" + (isWin(entry.score, state.length) ? " win" : "");
-    const chipClass = entry.score === 0 ? "chip zero" : "chip";
+    const chipClass = entry.score.correct === 0 ? "chip zero" : "chip";
     li.innerHTML = `
       <span class="history-turn">#${entry.turn}</span>
       <span class="history-guess">${entry.guess}</span>
       <span class="chip-group">
-        <span class="${chipClass}">${entry.score} / ${state.length} correct</span>
+        <span class="${chipClass}">${entry.score.correct} correct</span>
+        <span class="chip">${entry.score.inOrder} in order</span>
       </span>
       <span class="history-pool">${entry.pool}</span>
     `;
@@ -193,7 +196,7 @@ const MODE_COPY = {
     eyebrow: "RECOMMENDED GUESS",
     title: "tell your friend this guess",
     hint: (length) =>
-      `Your friend picks a secret ${length}-digit number (repeats and leading zeros OK). Press <strong>start</strong> and I'll tell you the optimal first guess — tell them, then enter how many digits they said are <strong>correct</strong>.`,
+      `Your friend picks a secret ${length}-digit number (repeats and leading zeros OK). Press <strong>start</strong> and I'll tell you the optimal first guess. Enter how many digits your friend says are <strong>correct</strong> (in the secret at all) and how many are <strong>in order</strong> (exact right position). You win when "in order" hits ${length}.`,
   },
   auto: {
     eyebrow: "ENGINE'S GUESS",
@@ -205,7 +208,7 @@ const MODE_COPY = {
     eyebrow: "YOUR GUESS",
     title: "you vs the secret",
     hint: (length) =>
-      `I'll pick a secret ${length}-digit number. Press <strong>start</strong>, then guess — I'll tell you how many digits you got right each time.`,
+      `I'll pick a secret ${length}-digit number. Press <strong>start</strong>, then guess — I'll tell you how many digits are correct and how many are in the right order.`,
   },
 };
 
@@ -250,7 +253,9 @@ function softReset(applyMode = true) {
   state.active = false;
   state.currentGuess = null;
   state.pendingCorrect = 0;
+  state.pendingInOrder = 0;
   correctValue.textContent = "0";
+  inorderValue.textContent = "0";
   renderGuessDisplay(null);
   renderTopPicks();
   renderHistory();
@@ -306,13 +311,24 @@ function issueCoachGuess() {
   renderGuessDisplay(guess);
   renderTopPicks();
   state.pendingCorrect = 0;
+  state.pendingInOrder = 0;
   correctValue.textContent = "0";
+  inorderValue.textContent = "0";
 }
 
 function handleScoreSubmit() {
   if (state.mode !== "coach" || !state.active || !state.currentGuess) return;
-  const sc = state.pendingCorrect;
-  if (sc < 0 || sc > state.length) {
+  const sc = {
+    correct: state.pendingCorrect,
+    inOrder: state.pendingInOrder,
+  };
+  if (
+    sc.inOrder > sc.correct ||
+    sc.correct > state.length ||
+    sc.inOrder > state.length ||
+    sc.correct < 0 ||
+    sc.inOrder < 0
+  ) {
     shake(coachInput);
     return;
   }
@@ -504,10 +520,25 @@ victoryAgain.addEventListener("click", () => {
 });
 steppers.forEach((btn) =>
   btn.addEventListener("click", () => {
+    const key = btn.dataset.step;
     const delta = Number(btn.dataset.delta);
-    const next = Math.max(0, Math.min(state.length, state.pendingCorrect + delta));
-    state.pendingCorrect = next;
-    correctValue.textContent = String(next);
+    const current = key === "correct" ? state.pendingCorrect : state.pendingInOrder;
+    const next = Math.max(0, Math.min(state.length, current + delta));
+    if (key === "correct") {
+      state.pendingCorrect = next;
+      correctValue.textContent = String(next);
+      if (state.pendingInOrder > next) {
+        state.pendingInOrder = next;
+        inorderValue.textContent = String(next);
+      }
+    } else {
+      state.pendingInOrder = next;
+      inorderValue.textContent = String(next);
+      if (next > state.pendingCorrect) {
+        state.pendingCorrect = next;
+        correctValue.textContent = String(next);
+      }
+    }
   })
 );
 submitScore.addEventListener("click", handleScoreSubmit);

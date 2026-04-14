@@ -1,14 +1,14 @@
-// Number Cracker solver.
+// Number Cracker solver with dual feedback.
 // ------------------------------------------------------------------
-// Game: your friend picks a 3- or 4-digit number (repeats allowed,
-// leading zeros allowed). Every guess returns a single integer —
-// how many positions in your guess exactly match the secret.
-// You win when the friend returns `length`.
+// Game: your friend picks a 3- or 4-digit secret (repeats and leading
+// zeros allowed). Every guess returns two numbers:
+//   - inOrder: digits in the right position (classic "bulls")
+//   - correct: total digits in the secret counting multiplicity,
+//              including inOrder (classic bulls + cows)
+// You win when inOrder === length.
 //
-// The engine uses Knuth-style minimax to pick the guess whose
-// worst-case remaining candidate pool is smallest. Because the
-// feedback is coarser than Bulls & Cows (only 0..length values),
-// expect more turns on average, but we're still provably optimal.
+// With repeats, each secret digit matches at most one guess digit —
+// that's the standard scoring rule (no double-counting).
 
 const OPENERS = { 3: "012", 4: "0123" };
 
@@ -24,15 +24,30 @@ export function allCandidates(length) {
 }
 
 export function score(guess, secret) {
-  let matches = 0;
+  let inOrder = 0;
+  const guessCounts = new Array(10).fill(0);
+  const secretCounts = new Array(10).fill(0);
   for (let i = 0; i < guess.length; i++) {
-    if (guess[i] === secret[i]) matches++;
+    if (guess[i] === secret[i]) {
+      inOrder++;
+    } else {
+      guessCounts[Number(guess[i])]++;
+      secretCounts[Number(secret[i])]++;
+    }
   }
-  return matches;
+  let misplaced = 0;
+  for (let d = 0; d < 10; d++) {
+    misplaced += Math.min(guessCounts[d], secretCounts[d]);
+  }
+  return { correct: inOrder + misplaced, inOrder };
 }
 
-export function isWin(scoreValue, length) {
-  return scoreValue === length;
+export function scoreKey(s) {
+  return s.correct * 10 + s.inOrder;
+}
+
+export function isWin(s, length) {
+  return s.inOrder === length;
 }
 
 export function isValidGuess(value, length) {
@@ -40,7 +55,8 @@ export function isValidGuess(value, length) {
 }
 
 export function filterCandidates(candidates, guess, observed) {
-  return candidates.filter((c) => score(guess, c) === observed);
+  const target = scoreKey(observed);
+  return candidates.filter((c) => scoreKey(score(guess, c)) === target);
 }
 
 export class Solver {
@@ -96,15 +112,15 @@ export class Solver {
   }
 
   _evaluate(guess, candidateSet) {
-    const buckets = new Array(this.length + 1).fill(0);
+    const buckets = new Map();
     for (const secret of this.candidates) {
-      buckets[score(guess, secret)]++;
+      const k = scoreKey(score(guess, secret));
+      buckets.set(k, (buckets.get(k) || 0) + 1);
     }
     const total = this.candidates.length;
     let worstCase = 0;
     let entropy = 0;
-    for (const count of buckets) {
-      if (count === 0) continue;
+    for (const count of buckets.values()) {
       if (count > worstCase) worstCase = count;
       const p = count / total;
       entropy -= p * Math.log2(p);
@@ -118,11 +134,8 @@ export class Solver {
   }
 
   _isBetter(a, b) {
-    // Entropy first — better average-case; position-only feedback gives
-    // a coarse score space where minimax ties are common and
-    // uninformative, so we rank by information gain instead.
-    if (Math.abs(a.entropy - b.entropy) > 1e-9) return a.entropy > b.entropy;
     if (a.worstCase !== b.worstCase) return a.worstCase < b.worstCase;
+    if (Math.abs(a.entropy - b.entropy) > 1e-9) return a.entropy > b.entropy;
     if (a.isCandidate !== b.isCandidate) return a.isCandidate;
     return a.guess < b.guess;
   }
@@ -133,8 +146,8 @@ export class Solver {
       this._evaluate(g, candidateSet)
     );
     evaluations.sort((a, b) => {
-      if (Math.abs(a.entropy - b.entropy) > 1e-9) return b.entropy - a.entropy;
       if (a.worstCase !== b.worstCase) return a.worstCase - b.worstCase;
+      if (Math.abs(a.entropy - b.entropy) > 1e-9) return b.entropy - a.entropy;
       if (a.isCandidate !== b.isCandidate) return a.isCandidate ? -1 : 1;
       return a.guess < b.guess ? -1 : 1;
     });
